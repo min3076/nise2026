@@ -9173,7 +9173,7 @@ const TS_NEUTRAL_GRAY = '#6D7882'; // KRDS gray-50
 // 컬러+패턴 세트의 실제 사용 순서
 // 모든 일반 그래프는 기준 블루 #256EF4 세트(인덱스 5)부터 시작
 const TS_LIGHT_SET_ORDER = [5,7,4,8,3,9,2,0,6,1];
-const TS_DARK_SET_ORDER = [5,0,6,1,7,2,8,3,9,4];
+const TS_DARK_SET_ORDER = TS_LIGHT_SET_ORDER.slice();
 const TS_DEFAULT_SET_ORDER = TS_LIGHT_SET_ORDER.slice();
 
 // 도넛 전용 대비 배색 — 1~10 팔레트 중 6번(#256EF4)을 기준으로
@@ -9678,8 +9678,8 @@ function tsApplyBarPatterns(o, patternsEnabled){
   if(patternsEnabled === undefined) patternsEnabled = true;
   const bars=(o.series||[]).filter(s=>s && s.type==='bar');
   if(!bars.length)return;
-  // 변환 화면이 이전 연도 색을 넘겨도 최종 배정은 모드별 공통 순서로 통일한다.
-  if(bars.every(function(s){return /^\d{4}년?$/.test(String(s.name||''));})){
+  // 단일 막대는 항상 06. 연도 변환 화면도 최종 배정은 모드별 공통 순서로 통일한다.
+  if(bars.length===1 || bars.every(function(s){return /^\d{4}년?$/.test(String(s.name||''));})){
     bars.forEach(function(s,i){
       const index=TS_DEFAULT_SET_ORDER[i%TS_DEFAULT_SET_ORDER.length];
       s._tsPaletteIndex=index;
@@ -9859,61 +9859,22 @@ function tsApplyBarTooltip(o,patternsEnabled){
 }
 
 
+function tsPatternSvg(set,w,h,rx){
+  const pitch=Math.max(2,Math.round(set.gap*set.size/100));
+  const scale=pitch/set.gap;
+  const path=tsPatternTilePath(set).replace(/^path:\/\//,'');
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'
+    +'<defs><pattern id="p" width="'+pitch+'" height="'+pitch+'" patternUnits="userSpaceOnUse" patternTransform="rotate('+(set.angle||0)+')">'
+    +'<g transform="scale('+scale+')"><path d="'+path+'" fill="'+tsPatternRGBA(set)+'"/></g></pattern></defs>'
+    +'<rect width="'+w+'" height="'+h+'" rx="'+rx+'" fill="'+tsTooltipEscape(set.bg)+'"/>'
+    +'<rect width="'+w+'" height="'+h+'" rx="'+rx+'" fill="url(#p)"/></svg>';
+}
 function tsPiePatternFill(set, enabled){
   if(!enabled || !set || set.pattern==='none') return set ? set.bg : '#256EF4';
-  if(typeof document==='undefined') return set.bg;
-
-  const pitch=Math.max(6,Math.round(set.gap*set.size/100));
-  const size=Math.max(8,Math.min(32,pitch));
-  const c=document.createElement('canvas');
-  c.width=size;c.height=size;
-  const ctx=c.getContext('2d');
-  if(!ctx) return set.bg;
-
-  ctx.fillStyle=set.bg;
-  ctx.fillRect(0,0,size,size);
-  ctx.strokeStyle=set.patternColor;
-  ctx.fillStyle=set.patternColor;
-  ctx.globalAlpha=tsPatternOpacity(set);
-  ctx.lineWidth=Math.max(1,set.thickness||1);
-  ctx.lineCap='square';
-
-  const line=function(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
-  switch(set.pattern){
-    case 'slash':
-      line(-size*.25,size*.25,size*.75,-size*.75);
-      line(-size*.25,size*1.25,size*1.75,-size*.75);
-      line(size*.75,size*1.25,size*1.75,size*.25);
-      break;
-    case 'horizontal':
-      line(0,size/2,size,size/2);
-      break;
-    case 'vertical':
-      line(size/2,0,size/2,size);
-      break;
-    case 'grid':
-      line(0,size/2,size,size/2); line(size/2,0,size/2,size);
-      break;
-    case 'dot':
-      ctx.beginPath();ctx.arc(size/2,size/2,Math.max(1,(set.thickness||1)*1.5),0,Math.PI*2);ctx.fill();
-      break;
-    case 'bigdot':
-      ctx.beginPath();ctx.arc(size/2,size/2,Math.max(2,(set.thickness||1)*2.2),0,Math.PI*2);ctx.fill();
-      break;
-    case 'shortdiag':
-      line(size*.15,size*.75,size*.45,size*.45); line(size*.55,size*.35,size*.85,size*.05);
-      break;
-    case 'densediag':
-      for(let x=-size;x<size*2;x+=Math.max(4,size/3)) line(x,size,x+size,0);
-      break;
-    case 'plus':
-      line(size*.25,size/2,size*.75,size/2); line(size/2,size*.25,size/2,size*.75);
-      break;
-    default:
-      return set.bg;
-  }
-  ctx.globalAlpha=1;
-  return {image:c,repeat:'repeat'};
+  // 도넛 본체·범례·툴팁이 동일한 SVG 패턴 경로, 간격, 크기, 색, 불투명도를 사용한다.
+  const pitch=Math.max(2,Math.round(set.gap*set.size/100));
+  const size=set.angle?Math.max(64,pitch*8):pitch;
+  return {image:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(tsPatternSvg(set,size,size,0)),repeat:'repeat'};
 }
 
 function tsApplyPiePatterns(o, patternsEnabled){
@@ -9932,8 +9893,8 @@ function tsApplyPiePatterns(o, patternsEnabled){
       item.itemStyle=Object.assign({},item.itemStyle||{}, {
         color:tsPiePatternFill(set,patternsEnabled),
         decal:null,
-        borderColor:'#fff',
-        borderWidth:2
+        borderColor:'transparent',
+        borderWidth:0
       });
       return item;
     });
@@ -10132,19 +10093,7 @@ function tsLegendPatternDataUri(setIndex, patternsEnabled){
       +'</svg>';
     return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
   }
-  const pitch=Math.max(2,Math.round(set.gap*set.size/100));
-  const scale=pitch/set.gap;
-  const path=tsPatternTilePath(set).replace(/^path:\/\//,'');
-  const rgba=tsPatternRGBA(set);
-  const angle=set.angle||0;
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'
-    +'<defs><pattern id="p" width="'+pitch+'" height="'+pitch+'" patternUnits="userSpaceOnUse" patternTransform="rotate('+angle+')">'
-    +'<g transform="scale('+scale+')"><path d="'+path+'" fill="'+rgba+'"/></g>'
-    +'</pattern></defs>'
-    +'<rect width="'+w+'" height="'+h+'" rx="'+rx+'" fill="'+tsTooltipEscape(set.bg)+'"/>'
-    +'<rect width="'+w+'" height="'+h+'" rx="'+rx+'" fill="url(#p)"/>'
-    +'</svg>';
-  return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
+  return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(tsPatternSvg(set,w,h,rx));
 }
 
 function tsLegendLineDataUri(series,setIndex){
@@ -10196,6 +10145,7 @@ function tsLegendSetIndex(o,name,fallbackIndex){
 
 function tsRenderHtmlLegend(node,o,redraw){
   if(!node) return;
+  tsNormalizeSingleBar(o);
   let host=node.closest ? node.closest('.ts-chart-view-shell,.review-detail-chart-frame') : null;
   if(!host) host=node.parentElement;
   if(!host) return;
@@ -11262,7 +11212,7 @@ function renderMiniChart(el, item){
       data:d.map(function(v,i){
         const setIndex=TS_DONUT_SET_ORDER[i%TS_DONUT_SET_ORDER.length];
       const set=TS_VISUAL_SETS[setIndex];
-        return Object.assign({},v,{itemStyle:{color:tsPiePatternFill(set,true),decal:null,borderColor:'#fff',borderWidth:1}});
+        return Object.assign({},v,{itemStyle:{color:tsPiePatternFill(set,true),decal:null,borderColor:'transparent',borderWidth:0}});
       })}];
   } else if(item.chartType==='gauge'){
     // 만족(파랑)·보통(회색)·불만족(빨강) 실제 분포를 아크에 그대로 반영
@@ -11520,7 +11470,7 @@ function renderDetailChart(el, item){
       const setIndex=TS_DONUT_SET_ORDER[i%TS_DONUT_SET_ORDER.length];
       const set=TS_VISUAL_SETS[setIndex];
       const item=(v&&typeof v==='object'&&!Array.isArray(v))?Object.assign({},v):{value:v};
-      item.itemStyle=Object.assign({},item.itemStyle||{},{color:tsPiePatternFill(set,true),decal:null,borderColor:'#fff',borderWidth:2});
+      item.itemStyle=Object.assign({},item.itemStyle||{},{color:tsPiePatternFill(set,true),decal:null,borderColor:'transparent',borderWidth:0});
       return item;
     })}];
   } else if(item.chartType==='gauge'){
@@ -11894,9 +11844,9 @@ function renderReviewReasonDesign(){
  el._tsRedrawViewOptions=function(){
   const next=echarts.util.clone(option);
   next.yAxis[1].axisLabel.show=el._tsViewState.labels;
-  next.series[0].itemStyle.decal=el._tsViewState.patterns?{symbol:'rect',dashArrayX:[1,0],dashArrayY:[2,5],rotation:-Math.PI/4,color:(window.gxDecal?gxDecal(0.3):'rgba(255,255,255,0.3)')}:null;
+  next.series[0].itemStyle.decal=null;
   const originalTooltip=next.tooltip.formatter;
-  next.tooltip.formatter=ps=>reviewDiagonalTooltipMarker(next.series[0].itemStyle.color,el._tsViewState.patterns)+originalTooltip(ps);
+  next.tooltip.formatter=ps=>reviewDiagonalTooltipMarker(next.series[0].itemStyle.color,false)+originalTooltip(ps);
   chart.setOption(next,{notMerge:true});
  };
  el._tsRedrawViewOptions();
@@ -12643,8 +12593,8 @@ function render7() {
       itemStyle:{
         color:tsPiePatternFill(set,true),
         decal:null,
-        borderColor:'#fff',
-        borderWidth:2
+        borderColor:'transparent',
+        borderWidth:0
       }
     };
   });
@@ -14582,10 +14532,25 @@ function glossaryBlockForTsItem(item){ const override=reviewGlossaryOverride(); 
 
 
 <script id="line-data-label-style">
-// 꺾은선 레이블: 흰색 25% 배경, 텍스트와 같은 테두리, 상하 3px·좌우 2px 여백, 모서리 2px.
+// 꺾은선 레이블: 흰색 100% 배경, 텍스트와 같은 테두리, 상하 3px·좌우 2px 여백, 모서리 2px.
 function tsLineLabelBorderColor(color){
  var rgba=echarts.color.parse(color);
  return rgba?'rgba('+rgba.slice(0,3).join(',')+',0.4)':color;
+}
+function tsNormalizeSingleBar(option){
+ if(!option||!option.series)return;
+ var series=Array.isArray(option.series)?option.series:[option.series];
+ var bars=series.filter(function(s){return s&&s.type==='bar';});
+ if(bars.length!==1)return;
+ var s=bars[0], color=TS_VISUAL_SETS[5].bg;
+ s._tsPaletteIndex=5;
+ s.itemStyle=Object.assign({},s.itemStyle,{color:color,decal:null});
+ if(Array.isArray(s.data))s.data=s.data.map(function(d){
+  if(!d||typeof d!=='object'||Array.isArray(d))return d;
+  // 있음/없음의 의미상 회색 강조는 유지하되 패턴은 제거한다.
+  var c=s._tsGateColors&&d.itemStyle?d.itemStyle.color:color;
+  return Object.assign({},d,{itemStyle:Object.assign({},d.itemStyle,{color:c||color,decal:s._tsGateColors&&d.itemStyle?d.itemStyle.decal:null})});
+ });
 }
 function tsStyleLineDataLabels(option){
  if(!option||!option.series)return;
@@ -14593,10 +14558,32 @@ function tsStyleLineDataLabels(option){
  function style(label,fallback){
   var color=label&&label.color;
   if(!color||color==='inherit')color=fallback;
-  return Object.assign({},label,{color:color,backgroundColor:'rgba(255,255,255,0.25)',padding:[3,2],borderRadius:2,borderWidth:0.8,borderColor:tsLineLabelBorderColor(color)});
+  return Object.assign({},label,{color:color,backgroundColor:'rgba(255,255,255,1)',padding:[3,2],borderRadius:2,borderWidth:0.8,borderColor:tsLineLabelBorderColor(color)});
  }
  series.forEach(function(s){
+  if(!s||s.type!=='pie')return;
+  s.itemStyle=Object.assign({},s.itemStyle,{borderWidth:0,borderColor:'transparent'});
+  if(Array.isArray(s.data))s.data=s.data.map(function(d){
+   if(!d||typeof d!=='object'||Array.isArray(d))return d;
+   return Object.assign({},d,{itemStyle:Object.assign({},d.itemStyle,{borderWidth:0,borderColor:'transparent'})});
+  });
+ });
+ var lineIndex=0;
+ series.forEach(function(s){
   if(!s||s.type!=='line')return;
+  // 다크 모드 꺾은선만 01부터 계열 순서대로 배정한다.
+  if(document.documentElement.dataset.screenMode==='dark'){
+   var index=lineIndex%TS_VISUAL_SETS.length;
+   var lineColor=TS_VISUAL_SETS[index].bg;
+   s._tsPaletteIndex=index;
+   s.itemStyle=Object.assign({},s.itemStyle,{color:lineColor});
+   s.lineStyle=Object.assign({},s.lineStyle,{color:lineColor});
+   if(Array.isArray(s.data))s.data=s.data.map(function(d){
+    if(!d||typeof d!=='object'||Array.isArray(d)||!d.itemStyle)return d;
+    return Object.assign({},d,{itemStyle:Object.assign({},d.itemStyle,{color:lineColor})});
+   });
+  }
+  lineIndex++;
   var color=(s.itemStyle&&s.itemStyle.color)||(s.lineStyle&&s.lineStyle.color)||'#1E2124';
   if(typeof color!=='string')color='#1E2124';
   s.label=style(s.label,color);
@@ -14642,8 +14629,8 @@ function tsStyleLineDataLabels(option){
    (o.series||[]).forEach(function(s){
     if(s.showBackground)s.backgroundStyle=Object.assign({},s.backgroundStyle,{color:token('surface-gray-subtler')});
      // Preserve chart colors/patterns. Dark label plates keep both light and dark data marks legible.
-    if(s.label&&s.label.show)s.label=Object.assign({},s.label,s.type==='line'?{color:token('text-basic'),backgroundColor:'rgba(255,255,255,0.25)',padding:[3,2],borderRadius:2,borderWidth:0.8,borderColor:tsLineLabelBorderColor(token('text-basic'))}:{color:token('text-basic'),backgroundColor:token('surface-white-subtle'),padding:3,borderRadius:3});
-    if(s.type==='line'&&Array.isArray(s.data))s.data.forEach(function(d){if(d&&d.label)d.label=Object.assign({},d.label,{color:token('text-basic'),borderColor:tsLineLabelBorderColor(token('text-basic')),backgroundColor:'rgba(255,255,255,0.25)',borderRadius:2});});
+    if(s.label&&s.label.show)s.label=Object.assign({},s.label,s.type==='line'?{color:token('text-basic'),backgroundColor:'rgba(0,0,0,0.05)',padding:[3,2],borderRadius:2,borderWidth:0.8,borderColor:tsLineLabelBorderColor(token('text-basic'))}:{color:token('text-basic'),backgroundColor:token('surface-white-subtle'),padding:3,borderRadius:3});
+    if(s.type==='line'&&Array.isArray(s.data))s.data.forEach(function(d){if(d&&d.label)d.label=Object.assign({},d.label,{color:token('text-basic'),borderColor:tsLineLabelBorderColor(token('text-basic')),backgroundColor:'rgba(0,0,0,0.05)',borderRadius:2});});
     if(s.endLabel&&s.endLabel.show)s.endLabel=Object.assign({},s.endLabel,{color:token('text-basic'),backgroundColor:token('surface-white-subtle')});
    });
    chart.setOption(o,{notMerge:true,silent:true});themed.add(chart);
@@ -14656,6 +14643,7 @@ function tsStyleLineDataLabels(option){
   c.setOption=function(){
    if(busy.has(c))return set.apply(c,arguments);
    var o0=arguments[0];
+   tsNormalizeSingleBar(o0);
    tsStyleLineDataLabels(o0);
    if(originals.has(c)&&o0&&typeof o0==='object'&&!Array.isArray(o0)&&Object.keys(o0).length===1&&o0.tooltip&&typeof o0.tooltip==='object'&&!Array.isArray(o0.tooltip)&&Object.keys(o0.tooltip).every(function(k){return k==='className';})){
     (originals.get(c).tooltip||[]).forEach(function(t){t.className=o0.tooltip.className;});
@@ -14747,28 +14735,21 @@ function tsStyleLineDataLabels(option){
   var dark=mode==='dark';
   fill(TS_DEFAULT_SET_ORDER, dark?TS_DARK_SET_ORDER:TS_LIGHT_SET_ORDER);
   fill(TS_BINARY_SET_ORDER, TS_DEFAULT_SET_ORDER.slice(0,2));
-  fill(TS_SITE_COLORS, dark?DARK_BG:light.site);
-  fill(TS_SITE_YEAR_COLORS, dark?DARK_YEAR:light.year);
+  // 그래프 팔레트와 패턴은 라이트/다크 공통. 화면 UI 테마만 별도로 적용한다.
+  fill(TS_SITE_COLORS, light.site);
+  fill(TS_SITE_YEAR_COLORS, light.year);
   fill(TS_BINARY_COLORS, TS_BINARY_SET_ORDER.map(function(i){return TS_SITE_COLORS[i];}));
-  fill(TS_CATEGORICAL_COLORS, dark?light.cat.map(conv):light.cat);
-  TS_VISUAL_SETS.forEach(function(s,i){
-   var b=light.sets[i];
-   Object.assign(s,b);
-   if(dark){
-    s.bg=DARK_BG[i]; s.text=DARK_TEXT[i];
-    if(b.pattern!=='none'){ s.patternColor=DARK_PATTERN; s.alpha=Math.max(40,Math.min(70,b.alpha)); s.transparency=0; }
-    s.borderColor=DARK_PATTERN;
-   }
-  });
+  fill(TS_CATEGORICAL_COLORS, light.cat);
+  TS_VISUAL_SETS.forEach(function(s,i){Object.assign(s,light.sets[i]);});
   if(light.pat && typeof TS_PATTERN_COLORS!=='undefined') fill(TS_PATTERN_COLORS, TS_VISUAL_SETS.map(function(s){return s.patternColor;}));
  }
  window.gxPalette={
   mode:function(){return mode;},
   apply:apply,
   light:light,
-  dark:{bg:DARK_BG.slice(),text:DARK_TEXT.slice(),pattern:DARK_PATTERN},
+  dark:{bg:light.site.slice(),text:light.sets.map(function(s){return s.text;}),pattern:light.sets.map(function(s){return s.patternColor;})},
   primary:function(){return TS_SITE_COLORS[5];},
-  decal:function(a){return mode==='dark'?'rgba(5,37,97,'+Math.max(0.35,a)+')':'rgba(255,255,255,'+a+')';},
+  decal:function(a){return 'rgba(255,255,255,'+a+')';},
   withLight:function(fn){var m=mode;if(m==='light')return fn();apply('light');try{return fn();}finally{apply(m);}}
  };
  window.gxPrimary=function(){return TS_SITE_COLORS[5];};
@@ -14860,12 +14841,12 @@ function renderReviewReasonDesign(){
   var axisMax=Math.min(100,Math.ceil((max+12)/10)*10);
   var o={animation:false,grid:{left:12,right:24,top:28,bottom:40},
    tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(ps){var q=ps[0],r=rows[q.dataIndex];if(!r.v)return r.name+'<br>자료 없음';var pv=p?val(it,p,r.name):null;
-     return (typeof reviewDiagonalTooltipMarker==='function'?reviewDiagonalTooltipMarker(primary,el._tsViewState.patterns):'')+'<b>'+r.name+'</b><br>'+y+'년: <b>'+r.v[0].toFixed(1)+'%</b>'+(r.v[1]!=null?' ('+fmt(r.v[1])+'명)':'')+(r.d===null||!pv?'':'<br>직전 조사('+p+'년 '+pv[0].toFixed(1)+'%) 대비 <b style="color:'+dColor(r.d)+'">'+dTxt(r.d)+'</b> '+dWord(r.d));}},
+     return (typeof reviewDiagonalTooltipMarker==='function'?reviewDiagonalTooltipMarker(primary,false):'')+'<b>'+r.name+'</b><br>'+y+'년: <b>'+r.v[0].toFixed(1)+'%</b>'+(r.v[1]!=null?' ('+fmt(r.v[1])+'명)':'')+(r.d===null||!pv?'':'<br>직전 조사('+p+'년 '+pv[0].toFixed(1)+'%) 대비 <b style="color:'+dColor(r.d)+'">'+dTxt(r.d)+'</b> '+dWord(r.d));}},
    xAxis:{type:'value',min:0,max:axisMax,interval:10,axisLabel:{formatter:'{value}%',color:token('--app-text-subtle')},axisLine:{show:true,lineStyle:{color:token('--app-border-gray-light')}},axisTick:{show:false},splitLine:{lineStyle:{color:token('--app-surface-gray-subtler')}}},
    yAxis:{type:'category',inverse:true,data:ORDER,axisLabel:{inside:true,align:'left',verticalAlign:'bottom',padding:[0,0,20,0],fontSize:13,fontWeight:400,width:Math.max(200,el.clientWidth-60),overflow:'break',lineHeight:20,color:token('--app-text-subtle')},axisLine:{show:false},axisTick:{show:false}},
    series:[{name:'취학유예·유예 이유 ('+groupName()+', '+y+'년)',type:'bar',barWidth:24,showBackground:true,backgroundStyle:{color:token('--app-surface-gray-subtler')},
     data:rows.map(function(r){return r.v?r.v[0]:null;}),
-    itemStyle:{color:primary,decal:el._tsViewState.patterns?{symbol:'rect',dashArrayX:[1,0],dashArrayY:[2,5],rotation:-Math.PI/4,color:(window.gxDecal?gxDecal(0.3):'rgba(255,255,255,0.3)')}:null},
+    itemStyle:{color:primary,decal:null},
     label:{show:el._tsViewState.labels,position:'right',distance:8,rich:rich,formatter:function(q){var r=rows[q.dataIndex];if(!r.v)return '';return '{v|'+r.v[0].toFixed(1)+'%}'+(r.d===null?'':'{d'+q.dataIndex+'|'+dTxt(r.d)+'}');}}}]};
   chart.setOption(o,{notMerge:true});
   el.setAttribute('aria-label',y+'년 취학유예·유예 이유 ('+groupName()+'), 직전 조사('+p+'년) 대비 증감 포함');
@@ -14933,7 +14914,7 @@ body #app .g13-pair .detail-chart{width:100%;margin:0!important;border:0!importa
    xAxis:{type:'value',gridIndex:gi,min:0,max:100,interval:20,axisLabel:{formatter:'{value}%',color:token('--app-text-subtle')},axisLine:{show:true,lineStyle:{color:token('--app-border-gray-light')}},axisTick:{show:false},splitLine:{lineStyle:{color:token('--app-surface-gray-subtler')}}},
    yAxis:{type:'category',gridIndex:gi,inverse:true,data:g.names,axisLabel:{inside:true,align:'left',verticalAlign:'bottom',padding:[0,0,20,0],fontSize:13,fontWeight:400,width:Math.max(200,width-60),overflow:'break',lineHeight:20,color:token('--app-text-subtle')},axisLine:{show:false},axisTick:{show:false}},
    series:{name:g.title,type:'bar',xAxisIndex:gi,yAxisIndex:gi,barWidth:24,showBackground:true,backgroundStyle:{color:token('--app-surface-gray-subtler')},
-    data:g.values.slice(),itemStyle:{color:primary,decal:decal(state.patterns)},
+    data:g.values.map(function(v){return {value:v,itemStyle:{color:primary,decal:null}};}),_tsPaletteIndex:5,itemStyle:{color:primary,decal:null},
     label:{show:state.labels,position:'right',distance:8,fontSize:13,fontWeight:700,color:token('--app-text-basic'),formatter:function(q){return q.value.toFixed(1)+'%';}}}
   };
  }
@@ -14945,9 +14926,9 @@ body #app .g13-pair .detail-chart{width:100%;margin:0!important;border:0!importa
   return {
    xAxis:{type:'category',gridIndex:gi,data:rows.map(function(r){return r.name;}),axisTick:{show:false},axisLine:{lineStyle:{color:token('--app-border-gray-light')}},axisLabel:{fontSize:13,color:token('--app-text-subtle')}},
    yAxis:{type:'value',gridIndex:gi,min:0,max:100,show:false},
-   series:{name:g.title,type:'bar',xAxisIndex:gi,yAxisIndex:gi,barWidth:24,
-    data:rows.map(function(r){return {value:r.value,itemStyle:{color:r.hi?primary:mute,decal:decal(state.patterns)}};}),
-    itemStyle:{color:primary,decal:decal(state.patterns)},
+   series:{name:g.title,type:'bar',_tsGateColors:true,xAxisIndex:gi,yAxisIndex:gi,barWidth:24,
+    data:rows.map(function(r){return {value:r.value,itemStyle:{color:r.hi?primary:mute,decal:r.hi?null:decal(state.patterns)}};}),
+    _tsPaletteIndex:5,itemStyle:{color:primary,decal:null},
     label:{show:state.labels,position:'top',distance:8,fontSize:13,fontWeight:700,color:token('--app-text-basic'),formatter:function(q){return Number(q.value).toFixed(1)+'%';}}}
   };
  }
@@ -14955,7 +14936,7 @@ body #app .g13-pair .detail-chart{width:100%;margin:0!important;border:0!importa
   var primary=window.gxPrimary?gxPrimary():'#256EF4';
   return {trigger:'axis',axisPointer:{type:'shadow'},formatter:function(ps){
    var q=Array.isArray(ps)?ps[0]:ps, g=gs[q.seriesIndex]||gs[0];
-   return (typeof reviewDiagonalTooltipMarker==='function'?reviewDiagonalTooltipMarker(q.color||primary,state.patterns):'')+'<b>'+esc(q.name)+'</b><br>'+esc(g.title)+': <b>'+Number(q.value).toFixed(1)+'%</b>'+(g.n?'<br>'+esc(g.n)+' 기준':'');}};
+   return (typeof reviewDiagonalTooltipMarker==='function'?reviewDiagonalTooltipMarker(q.color||primary,state.patterns&&!(q.data&&q.data.itemStyle&&q.data.itemStyle.decal===null)):'')+'<b>'+esc(q.name)+'</b><br>'+esc(g.title)+': <b>'+Number(q.value).toFixed(1)+'%</b>'+(g.n?'<br>'+esc(g.n)+' 기준':'');}};
  }
  function single(g,state,width,i){
   var p=i===0?vparts(g,state,0):parts(g,state,width,0);
@@ -15902,37 +15883,24 @@ html[data-screen-mode=dark] #graph-guide-btn[aria-current=page]{background:#020F
    +'<ul class="sg-list"><li><b>선그래프:</b> Color + Line Pattern + Marker</li><li><b>막대그래프:</b> Color + Pattern + Label</li></ul>'
    +h4('3.3 현재 적용된 색 순서 규칙')
    +'<table class="sg-tbl"><thead><tr><th scope="col">그래프 유형</th><th scope="col">색 순서 (단계)</th><th scope="col">적용 조건</th></tr></thead><tbody>'
-   +'<tr><th scope="row">일반(응답 항목)</th><td>'+[5,7,6,4,8,3].map(function(i){return chip(SITE[i]);}).join('')+' 라이트: 06 → 08 → 05 → 09 → 04 → 10 → 03 → 01 → 07 → 02 / 다크: 06 → 01 → 07 → 02 → 08 → 03 → 09 → 04 → 10 → 05</td><td>첫 계열은 항상 #256EF4</td></tr>'
+   +'<tr><th scope="row">일반(응답 항목)</th><td>'+[5,7,6,4,8,3].map(function(i){return chip(SITE[i]);}).join('')+' 라이트: 06 → 08 → 05 → 09 → 04 → 10 → 03 → 01 → 07 → 02 / 다크: 06 → 08 → 05 → 09 → 04 → 10 → 03 → 01 → 07 → 02</td><td>첫 계열은 항상 #256EF4</td></tr>'
    +'<tr><th scope="row">이진(2개 막대)</th><td>'+TS_BINARY_SET_ORDER.map(function(i){return chip(SITE[i])+' '+String(i+1).padStart(2,'0');}).join(' → ')+'</td><td>막대 계열이 2개일 때(있음/없음, 남/여)</td></tr>'
-   +'<tr><th scope="row">연도형</th><td>라이트: 06 → 08 → 05 → 09 → 04 → 10 → 03 → 01 → 07 → 02 / 다크: 06 → 01 → 07 → 02 → 08 → 03 → 09 → 04 → 10 → 05</td><td>계열명이 모두 “○○○○년”일 때 · 계열 순서대로 06부터 적용</td></tr>'
+   +'<tr><th scope="row">연도형</th><td>라이트: 06 → 08 → 05 → 09 → 04 → 10 → 03 → 01 → 07 → 02 / 다크: 06 → 08 → 05 → 09 → 04 → 10 → 03 → 01 → 07 → 02</td><td>계열명이 모두 “○○○○년”일 때 · 계열 순서대로 06부터 적용</td></tr>'
    +'<tr><th scope="row">의미색(예외)</th><td>'+chip('#E03131')+'<code>#E03131</code> 강조 · '+chip('#E8590C')+'<code>#E8590C</code> 경고 · '+chip('#B1CEFB')+'<code>#B1CEFB</code> 콤보 보조선</td><td>팔레트 재지정 대상에서 제외</td></tr>'
    +'</tbody></table>';
   function h4(t){return '<h4 class="sg-h4">'+t+'</h4>';}
 
   /* ── 4. Pattern ── */
   var pats=SITE.map(function(c,i){var s=SETS[i]||{};var uri=swatch(i);return '<tr><td>'+String(i+1).padStart(2,'0')+'</td><td class="sg-pat">'+(uri?'<img alt="" src="'+uri+'">':chip(c))+'</td><td>'+chip(c)+'<code>'+c+'</code></td><td><b>'+PATNAME[i]+'</b></td><td>'+(IMPL[s.pattern]||'')+(s.pattern&&s.pattern!=='none'?' · '+chip(s.patternColor)+'<code>'+s.patternColor+'</code> '+'불투명도 '+s.alpha+'% · 투명도 '+s.transparency+'%':'')+'</td><td>'+chip(s.text||'#fff')+'<code>'+(s.text||'')+'</code></td></tr>';}).join('');
-  h+=h4('3.4 다크 모드 팔레트 (모드별 선언)')
-   +'<p class="sg-p">라이트 모드와 다크 모드는 그래프 색을 <b>따로 선언</b>한다. 세트 순서(01~10)와 패턴은 그대로 두고 밝기만 반전해, 라이트에서 진한 세트일수록 다크에서 밝게 보이도록 한다. 다크 색은 <b>KRDS primary 값만</b> 쓴다. 다크 배경에 쓸 수 있는 밝은 단계가 6개뿐이라 01·02, 03·04, 05·06, 07·08은 같은 색을 쓰고 <b>패턴으로 구분</b>한다. 모든 그래프 색은 다크 배경(#131416) 대비 <b>4:1 이상</b>을 확보한다(그래프 요소 기준 3:1).</p>'
-   +'<table class="sg-tbl"><thead><tr><th scope="col">세트</th><th scope="col">라이트 색</th><th scope="col">다크 배경 대비(라이트 색)</th><th scope="col">다크 색</th><th scope="col">다크 배경 대비</th><th scope="col">막대 안 글자(다크)</th></tr></thead><tbody>'
-+'<tr><td>01</td><td>'+chip('#ECF2FE')+'<code>#ECF2FE</code></td><td>16.4:1</td><td>'+chip('#256EF4')+'<code>#256EF4</code></td><td>4.1:1</td><td>'+chip('#FFFFFF')+'<code>#FFFFFF</code></td></tr>'
-+'<tr><td>02</td><td>'+chip('#D8E5FD')+'<code>#D8E5FD</code></td><td>14.5:1</td><td>'+chip('#256EF4')+'<code>#256EF4</code></td><td>4.1:1</td><td>'+chip('#FFFFFF')+'<code>#FFFFFF</code></td></tr>'
-+'<tr><td>03</td><td>'+chip('#B1CEFB')+'<code>#B1CEFB</code></td><td>11.5:1</td><td>'+chip('#4C87F6')+'<code>#4C87F6</code></td><td>5.4:1</td><td>'+chip('#03163A')+'<code>#03163A</code></td></tr>'
-+'<tr><td>04</td><td>'+chip('#86AFF9')+'<code>#86AFF9</code></td><td>8.4:1</td><td>'+chip('#4C87F6')+'<code>#4C87F6</code></td><td>5.4:1</td><td>'+chip('#03163A')+'<code>#03163A</code></td></tr>'
-+'<tr><td>05</td><td>'+chip('#4C87F6')+'<code>#4C87F6</code></td><td>5.4:1</td><td>'+chip('#86AFF9')+'<code>#86AFF9</code></td><td>8.4:1</td><td>'+chip('#03163A')+'<code>#03163A</code></td></tr>'
-+'<tr><td>06</td><td>'+chip('#256EF4')+'<code>#256EF4</code></td><td>4.1:1</td><td>'+chip('#86AFF9')+'<code>#86AFF9</code></td><td>8.4:1</td><td>'+chip('#03163A')+'<code>#03163A</code></td></tr>'
-+'<tr><td>07</td><td>'+chip('#0B50D0')+'<code>#0B50D0</code></td><td>2.7:1 <b style="color:#BD2C0F">✕</b></td><td>'+chip('#B1CEFB')+'<code>#B1CEFB</code></td><td>11.5:1</td><td>'+chip('#03163A')+'<code>#03163A</code></td></tr>'
-+'<tr><td>08</td><td>'+chip('#083891')+'<code>#083891</code></td><td>1.7:1 <b style="color:#BD2C0F">✕</b></td><td>'+chip('#B1CEFB')+'<code>#B1CEFB</code></td><td>11.5:1</td><td>'+chip('#03163A')+'<code>#03163A</code></td></tr>'
-+'<tr><td>09</td><td>'+chip('#052561')+'<code>#052561</code></td><td>1.3:1 <b style="color:#BD2C0F">✕</b></td><td>'+chip('#D8E5FD')+'<code>#D8E5FD</code></td><td>14.5:1</td><td>'+chip('#03163A')+'<code>#03163A</code></td></tr>'
-+'<tr><td>10</td><td>'+chip('#03163A')+'<code>#03163A</code></td><td>1.0:1 <b style="color:#BD2C0F">✕</b></td><td>'+chip('#ECF2FE')+'<code>#ECF2FE</code></td><td>16.4:1</td><td>'+chip('#03163A')+'<code>#03163A</code></td></tr>'
-   +'</tbody></table>'
-   +'<ul class="sg-list"><li>기준색: 라이트 <b>#256EF4</b>(세트 06) → 다크 <b>#86AFF9</b>(KRDS primary-30)</li><li>다크 모드 패턴 무늬는 <b>#052561</b>(불투명도 40~70%), 막대 안 글자는 대비가 큰 쪽(#FFFFFF 또는 #03163A)</li><li>연도형·이진·일반은 모드별 적용 순서를 사용하며, 색상 번호와 패턴 번호를 같은 세트로 유지한다.</li><li>화면 모드를 바꾸면 그래프·범례·Tooltip·패턴 스와치가 함께 다시 그려진다.</li></ul>'
-   +cmp('3.4 다크 모드 팔레트',[['선언 방식','모드별 팔레트','라이트/다크 팔레트 분리, 모드 전환 시 다시 그리기','ok'],['다크 대비','배경 대비 4:1 이상','최소 4.05:1(세트 01 #256EF4)','ok'],['범례·Tooltip','그래프와 동일','같은 세트 색·패턴으로 자동 교체','ok']]);
+  h+=h4('3.4 다크 모드 그래프 팔레트')
+   +'<p class="sg-p">다크 모드의 그래프 색상·패턴·패턴색·불투명도·적용 순서는 <b>라이트 모드와 동일</b>하다. 색상 번호와 패턴 번호는 같은 세트를 사용한다. 화면 배경·축·글자 등 UI는 다크 모드를 유지한다.</p>'
+   +'<p class="sg-note">공통 순서: 06 → 08 → 05 → 09 → 04 → 10 → 03 → 01 → 07 → 02. 구성 항목 2개: 06 → 08.</p>';
 
   h+=h2(4,'Pattern 스타일')
    +'<p class="sg-p">Pattern은 장식 목적이 아니라 <b>색상을 보완하여 데이터 계열을 식별하기 위한 정보 요소</b>로 사용한다.</p>'
    +'<table class="sg-tbl"><thead><tr><th scope="col">No.</th><th scope="col">스와치</th><th scope="col">Background</th><th scope="col">Pattern (가이드)</th><th scope="col">현재 구현 · 패턴색 · 불투명도 · 투명도</th><th scope="col">대비 글자색</th></tr></thead><tbody>'+pats+'</tbody></table>'
    +'<ul class="sg-list"><li>동일한 데이터 계열에는 다른 화면에서도 동일한 <b>Color + Pattern 조합</b>을 유지한다. (현재: 색-패턴 1:1 고정 세트로 구현)</li><li>Pattern은 지나치게 촘촘하거나 복잡하게 사용하지 않는다.</li></ul>'
-   +'<p class="sg-note">※ ② 가로막대와 ⑬ 동시 병기(두 그래프 모두) 화면은 세트 대신 흰색 사선(<code>rgba(255,255,255,.3~.45)</code>, 45°)을 씁니다. “패턴 적용” 토글로 끌 수 있습니다.</p>';
+   +'<p class="sg-note">※ 범례로 구분할 계열이 없거나 막대 계열이 1개이면 06번 기본 파랑·무패턴을 사용합니다. ② 가로막대와 ⑬ 동시 병기에도 같은 규칙을 적용합니다.</p>';
 
 
   h+=h3('sg-pattern-order','4.1 막대 계열의 색상·패턴 적용 순서')
@@ -15940,9 +15908,9 @@ html[data-screen-mode=dark] #graph-guide-btn[aria-current=page]{background:#020F
    +'<ol class="sg-pattern-order">'+TS_DEFAULT_SET_ORDER.map(function(idx,pos){return '<li><img alt="" src="'+swatch(idx)+'"><span>'+(pos+1)+'번째 · <b>패턴 '+String(idx+1).padStart(2,'0')+'</b><br>'+PATNAME[idx]+'</span></li>';}).join('')+'</ol>'
    +'<div class="sg-pattern-examples">'+[1,2,4,10].map(function(n){var ids=TS_DEFAULT_SET_ORDER.slice(0,n).map(function(i){return String(i+1).padStart(2,'0');}).join(' → ');return '<figure class="sg-pattern-example'+(n===10?' is-wide':'')+'"><figcaption>계열 '+n+'개 · '+ids+'</figcaption><div class="sg-chart" id="sg-pattern-demo-'+n+'" role="img" aria-label="'+n+'개 계열의 패턴 적용 순서 예시"></div></figure>';}).join('')
    +'<figure class="sg-pattern-example is-wide"><figcaption>누적막대 · 구성 항목 10개</figcaption><div class="sg-chart" id="sg-pattern-demo-stack" role="img" aria-label="현재 화면 모드의 우선순위에 따라 패턴을 적용한 누적막대 예시"></div></figure></div>'
-   +'<p class="sg-note">누적막대의 값은 숫자(%)로 표시한다. 패턴이 있는 조각은 숫자 뒤에 막대와 같은 색의 배경, 여백(위아래 3px·좌우 6px), 둥근 모서리(5px)를 적용한다. 무패턴 조각에는 별도 배경을 넣지 않는다. 두 모드 모두 계열 1개는 06(무패턴)부터 시작한다. 계열 2개는 라이트 06 → 08, 다크 06 → 01를 사용한다. 색상 번호와 패턴 번호는 항상 동일한 세트다. 누적막대도 구성 항목 순서대로 적용하며, 10개를 넘으면 처음부터 반복한다. 도넛과 위에 명시한 흰색 사선 전용 화면은 별도 규칙을 사용한다.</p>';
+   +'<p class="sg-note">누적막대의 값은 숫자(%)로 표시한다. 패턴이 있는 조각은 숫자 뒤에 막대와 같은 색의 배경, 여백(위아래 3px·좌우 6px), 둥근 모서리(5px)를 적용한다. 무패턴 조각에는 별도 배경을 넣지 않는다. 두 모드 모두 계열 1개는 06(무패턴)부터 시작한다. 계열 2개는 라이트 06 → 08, 다크 06 → 08를 사용한다. 색상 번호와 패턴 번호는 항상 동일한 세트다. 누적막대도 구성 항목 순서대로 적용하며, 10개를 넘으면 처음부터 반복한다. 도넛은 별도 구성비 순서를 사용한다. 단일 막대는 패턴 토글과 관계없이 06번 무패턴을 유지한다.</p>';
 
-  h+='<p class="sg-note">꺾은선 데이터 레이블: 흰색 25% 배경(rgba(255,255,255,0.25), 기본 파랑 위 텍스트 #052561 대비 약 4.79:1), 텍스트와 같은 색의 0.8px 테두리(불투명도 40%), 상하 3px·좌우 2px 여백, 모서리 2px.</p>';
+  h+='<p class="sg-note">다크 모드 꺾은선 색상 순서: 01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10. 라이트 모드는 기존 순서 유지. 꺾은선 데이터 레이블: 배경: 라이트 흰색 100%, 다크 검정 5%(기본 파랑 #256EF4 위 밝은 글자 #F4F5F6 대비 약 4.54:1), 텍스트와 같은 색의 0.8px 테두리(불투명도 40%), 상하 3px·좌우 2px 여백, 모서리 2px.</p>';
 
   /* ── 5. 13종 ── */
   h+=h2(5,'그래프 종류별 스타일 가이드 — 13종')
@@ -16685,7 +16653,7 @@ body #app .sm-trend .krds-table-wrap table.tbl th[scope=row]{white-space:nowrap}
     xAxis:{type:'category',data:D.years.map(String),axisTick:{show:false},axisLine:{lineStyle:{color:line}},axisLabel:{color:sub}},
     yAxis:[{type:'value',min:0,name:unit,nameTextStyle:{color:sub,align:'right'},axisLabel:{color:sub,formatter:axisFmt},splitLine:{lineStyle:{color:token('--app-surface-gray-subtler','#F4F5F6')}}},
            {type:'value',min:gMin,max:gMax,interval:3,name:'%',nameTextStyle:{color:sub,align:'left'},axisLabel:{color:sub,formatter:'{value}%'},splitLine:{show:false}}],
-    series:[{name:barName,type:'bar',itemStyle:{color:window.gxPrimary?gxPrimary():'#256EF4'},label:{show:false},
+    series:[{name:barName,type:'bar',_tsPaletteIndex:5,itemStyle:{color:window.gxPrimary?gxPrimary():'#256EF4'},label:{show:false},
       data:viewState.labels?onlyLast(values,li,{position:'top',fontSize:13,fontWeight:700,color:basic,formatter:function(p){return fmt(p.value);}}):values.slice()},
      {name:lineName,type:'line',yAxisIndex:1,connectNulls:false,symbol:'rect',symbolSize:8,itemStyle:{color:lc},lineStyle:{color:lc,width:3,type:viewState.patterns?'dashed':'solid'},z:10,label:{show:false},
       data:viewState.labels?onlyLast(g,lg,{position:'top',distance:8,fontSize:13,fontWeight:700,color:lc,formatter:function(p){return (+p.value).toFixed(1)+'%';}}):g}]};
