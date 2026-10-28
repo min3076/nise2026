@@ -14532,7 +14532,7 @@ function glossaryBlockForTsItem(item){ const override=reviewGlossaryOverride(); 
 
 
 <script id="line-data-label-style">
-// 꺾은선 레이블: 흰색 100% 배경, 텍스트와 같은 테두리, 상하 3px·좌우 2px 여백, 모서리 2px.
+// 꺾은선 레이블: 흰색 60% 배경, 텍스트와 같은 테두리, 상하 3px·좌우 2px 여백, 모서리 2px.
 function tsLineLabelBorderColor(color){
  var rgba=echarts.color.parse(color);
  return rgba?'rgba('+rgba.slice(0,3).join(',')+',0.4)':color;
@@ -14558,7 +14558,7 @@ function tsStyleLineDataLabels(option){
  function style(label,fallback){
   var color=label&&label.color;
   if(!color||color==='inherit')color=fallback;
-  return Object.assign({},label,{color:color,backgroundColor:'rgba(255,255,255,1)',padding:[3,2],borderRadius:2,borderWidth:0.8,borderColor:tsLineLabelBorderColor(color)});
+  return Object.assign({},label,{color:color,backgroundColor:'rgba(255,255,255,0.6)',padding:[3,2],borderRadius:2,borderWidth:0.8,borderColor:tsLineLabelBorderColor(color)});
  }
  series.forEach(function(s){
   if(!s||s.type!=='pie')return;
@@ -15910,7 +15910,7 @@ html[data-screen-mode=dark] #graph-guide-btn[aria-current=page]{background:#020F
    +'<figure class="sg-pattern-example is-wide"><figcaption>누적막대 · 구성 항목 10개</figcaption><div class="sg-chart" id="sg-pattern-demo-stack" role="img" aria-label="현재 화면 모드의 우선순위에 따라 패턴을 적용한 누적막대 예시"></div></figure></div>'
    +'<p class="sg-note">누적막대의 값은 숫자(%)로 표시한다. 패턴이 있는 조각은 숫자 뒤에 막대와 같은 색의 배경, 여백(위아래 3px·좌우 6px), 둥근 모서리(5px)를 적용한다. 무패턴 조각에는 별도 배경을 넣지 않는다. 두 모드 모두 계열 1개는 06(무패턴)부터 시작한다. 계열 2개는 라이트 06 → 08, 다크 06 → 08를 사용한다. 색상 번호와 패턴 번호는 항상 동일한 세트다. 누적막대도 구성 항목 순서대로 적용하며, 10개를 넘으면 처음부터 반복한다. 도넛은 별도 구성비 순서를 사용한다. 단일 막대는 패턴 토글과 관계없이 06번 무패턴을 유지한다.</p>';
 
-  h+='<p class="sg-note">다크 모드 꺾은선 색상 순서: 01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10. 라이트 모드는 기존 순서 유지. 꺾은선 데이터 레이블: 배경: 라이트 흰색 100%, 다크 검정 5%(기본 파랑 #256EF4 위 밝은 글자 #F4F5F6 대비 약 4.54:1), 텍스트와 같은 색의 0.8px 테두리(불투명도 40%), 상하 3px·좌우 2px 여백, 모서리 2px.</p>';
+  h+='<p class="sg-note">다크 모드 꺾은선 색상 순서: 01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10. 라이트 모드는 기존 순서 유지. 꺾은선 데이터 레이블: 배경: 라이트 흰색 60%(검정 배경 위에서도 글자 #052561 대비 약 5.11:1), 다크 검정 5%(기본 파랑 #256EF4 위 밝은 글자 #F4F5F6 대비 약 4.54:1), 텍스트와 같은 색의 0.8px 테두리(불투명도 40%), 상하 3px·좌우 2px 여백, 모서리 2px.</p>';
 
   /* ── 5. 13종 ── */
   h+=h2(5,'그래프 종류별 스타일 가이드 — 13종')
