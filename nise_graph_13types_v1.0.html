@@ -15652,6 +15652,15 @@ body :is(#app,#ts-fullscreen-modal,.sg-page,.sg-preview) .ts-html-legend :is(.ts
 .sg .sg-sw span{display:block;padding:6px 7px}
 .sg .sg-sw b{display:block;font-weight:700}
 .sg .sg-sw.is-base{outline:2px solid #256EF4;outline-offset:1px}
+.sg .sg-pattern-order{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 24px;padding:0;list-style:none}
+.sg .sg-pattern-order li{display:flex;align-items:center;gap:8px;border:1px solid var(--sg-line);border-radius:8px;padding:10px;font-size:14px}
+.sg .sg-pattern-order img{width:36px;height:36px;border-radius:4px}
+.sg .sg-pattern-examples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:16px 0}
+.sg .sg-pattern-example{min-width:0;margin:0;padding:16px;border:1px solid var(--sg-line);border-radius:12px;background:var(--app-surface-white,#fff)}
+.sg .sg-pattern-example figcaption{font-size:16px;font-weight:700;margin-bottom:8px}
+.sg .sg-pattern-example .sg-chart{width:100%;height:260px}
+.sg .sg-pattern-example.is-wide{grid-column:1/-1}
+@media(max-width:800px){.sg .sg-pattern-examples{grid-template-columns:minmax(0,1fr)}}
 .sg .sg-pat img{width:40px;height:40px;display:block;border-radius:4px}
 .sg .sg-demo{margin:14px 0 6px;max-width:760px;background:var(--app-surface-white,#fff);border:1px solid var(--sg-line);border-radius:var(--krds-radius-xlarge1);padding:14px 14px 6px}
 .sg .sg-demo figcaption{font-size:15px;color:var(--sg-sub);margin:0 0 4px}
@@ -15887,6 +15896,13 @@ html[data-screen-mode=dark] #graph-guide-btn[aria-current=page]{background:#020F
    +'<table class="sg-tbl"><thead><tr><th scope="col">No.</th><th scope="col">스와치</th><th scope="col">Background</th><th scope="col">Pattern (가이드)</th><th scope="col">현재 구현 · 패턴색 · 불투명도</th><th scope="col">대비 글자색</th></tr></thead><tbody>'+pats+'</tbody></table>'
    +'<ul class="sg-list"><li>동일한 데이터 계열에는 다른 화면에서도 동일한 <b>Color + Pattern 조합</b>을 유지한다. (현재: 색-패턴 1:1 고정 세트로 구현)</li><li>Pattern은 지나치게 촘촘하거나 복잡하게 사용하지 않는다.</li></ul>'
    +'<p class="sg-note">※ ② 가로막대와 ⑬ 동시 병기(두 그래프 모두) 화면은 세트 대신 흰색 사선(<code>rgba(255,255,255,.3~.45)</code>, 45°)을 씁니다. “패턴 적용” 토글로 끌 수 있습니다.</p>';
+
+  h+=h3('sg-pattern-order','4.1 막대 계열의 색상·패턴 적용 순서')
+   +'<p class="sg-p">일반 막대·연도 비교·누적막대는 <b>계열 순서대로 아래 세트</b>를 적용한다. 막대의 높이·값·연도 숫자가 아니라 범례의 첫 번째 계열부터 배정한다. 아래는 적용 순서를 설명하기 위한 예시 데이터다.</p>'
+   +'<ol class="sg-pattern-order">'+TS_DEFAULT_SET_ORDER.map(function(idx,pos){return '<li><img alt="" src="'+swatch(idx)+'"><span>'+(pos+1)+'번째 · <b>패턴 '+String(idx+1).padStart(2,'0')+'</b><br>'+PATNAME[idx]+'</span></li>';}).join('')+'</ol>'
+   +'<div class="sg-pattern-examples">'+[1,2,4,10].map(function(n){var ids=TS_DEFAULT_SET_ORDER.slice(0,n).map(function(i){return String(i+1).padStart(2,'0');}).join(' → ');return '<figure class="sg-pattern-example'+(n===10?' is-wide':'')+'"><figcaption>계열 '+n+'개 · '+ids+'</figcaption><div class="sg-chart" id="sg-pattern-demo-'+n+'" role="img" aria-label="'+n+'개 계열의 패턴 적용 순서 예시"></div></figure>';}).join('')
+   +'<figure class="sg-pattern-example is-wide"><figcaption>누적막대 · 구성 항목 10개</figcaption><div class="sg-chart" id="sg-pattern-demo-stack" role="img" aria-label="현재 화면 모드의 우선순위에 따라 패턴을 적용한 누적막대 예시"></div></figure></div>'
+   +'<p class="sg-note">1.0 기존 설정을 그대로 사용하는 예시다. 일반 막대의 적용 순서는 06 → 08 → 07 → 05 → 09 → 04 → 10 → 03 → 02 → 01이며, 계열 수만큼 앞에서부터 사용한다. 누적막대는 각 10%로 구성해 전체 10개 패턴을 보여준다. 연도 비교·도넛·흰색 사선 전용 화면의 기존 별도 규칙은 유지한다.</p>';
 
   /* ── 5. 13종 ── */
   h+=h2(5,'그래프 종류별 스타일 가이드 — 13종')
@@ -16229,6 +16245,20 @@ html[data-screen-mode=dark] #graph-guide-btn[aria-current=page]{background:#020F
   function mk(id,opt){var el=document.getElementById(id);if(!el)return;var c=echarts.init(el);c.setOption(opt);charts.push(c);}
   var tip={trigger:'axis',backgroundColor:'#fff',borderWidth:1,textStyle:{color:'#666'}};
   var lg={top:0,itemWidth:22,itemHeight:14,textStyle:{fontSize:13}};
+  /* 패턴 순서 예시: 실제 그래프의 공통 세트와 decal 생성 함수를 사용 */
+  [1,2,4,10].forEach(function(n){
+   var order=TS_DEFAULT_SET_ORDER.slice(0,n);
+   mk('sg-pattern-demo-'+n,{animation:false,tooltip:Object.assign({},tip,{trigger:'item'}),grid:{top:28,left:44,right:16,bottom:42},
+    xAxis:{type:'category',data:['예시 항목'],axisLine:{lineStyle:{color:axis}},axisTick:{show:false}},
+    yAxis:{type:'value',max:100,axisLabel:{formatter:'{value}%'},splitLine:{lineStyle:{color:grid}}},
+    series:order.map(function(idx,i){return {name:(i+1)+'번째 · 패턴 '+String(idx+1).padStart(2,'0'),type:'bar',barMaxWidth:64,data:[45+(i*13)%46],_tsPaletteIndex:idx,itemStyle:{color:SITE[idx],decal:decal(idx)},label:{show:true,position:'top',color:tok('--app-text-basic','#1E2124'),formatter:String(idx+1).padStart(2,'0')}};})});
+  });
+  var stackExample={animation:false,tooltip:Object.assign({},tip,{trigger:'item'}),grid:{top:30,left:65,right:16,bottom:36},
+   xAxis:{type:'value',max:100,axisLabel:{formatter:'{value}%'},splitLine:{lineStyle:{color:grid}}},
+   yAxis:{type:'category',data:['구성비'],axisLine:{show:false},axisTick:{show:false}},
+   series:TS_DEFAULT_SET_ORDER.map(function(idx,i){return {name:(i+1)+'번째 · 패턴 '+String(idx+1).padStart(2,'0'),type:'bar',stack:'pattern-example',barWidth:64,data:[10],_tsPaletteIndex:idx,itemStyle:{color:SITE[idx],decal:decal(idx)},label:{show:true,position:'inside',color:TS_VISUAL_SETS[idx].text,formatter:'패턴 '+String(idx+1).padStart(2,'0')}};})};
+  tsApplyBarPatterns(stackExample,true);
+  mk('sg-pattern-demo-stack',stackExample);
   /* ⑨ 그룹 세로막대 */
   var years=[['2017년',[11.8,88.2],4],['2020년',[18.4,81.6],5],['2023년',[13.9,86.1],6]];
   mk('sg-demo-group',{animation:false,tooltip:Object.assign({},tip,{axisPointer:{type:'shadow'}}),legend:lg,grid:{top:45,left:44,right:12,bottom:30},
